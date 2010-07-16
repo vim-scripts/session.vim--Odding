@@ -1,9 +1,7 @@
 " Vim script
 " Author: Peter Odding
-" Last Change: July 15, 2010
+" Last Change: July 16, 2010
 " URL: http://peterodding.com/code/vim/session/
-
-" FIXME Integration with my full screen plug-in :-)
 
 " Public API for session persistence. {{{1
 
@@ -85,7 +83,7 @@ function! session#save_state(commands) " {{{2
   call session#save_qflist(a:commands)
 
   " Save open tab pages & windows.
-  call extend(a:commands, ['', 'set invsplitbelow'])
+  call add(a:commands, '')
   let tabpagenr_save = tabpagenr()
   let split_cmd = 'split'
   try
@@ -93,52 +91,64 @@ function! session#save_state(commands) " {{{2
       execute 'tabnext' tabpagenr
       let winnr_save = winnr()
       try
+        let restore_nerd_tree = 0
         for winnr in range(1, winnr('$'))
           call add(a:commands, '')
           execute winnr . 'wincmd w'
           if has('quickfix') && &bt == 'quickfix'
             call add(a:commands, 'cwindow')
           else
-            let bufname_absolute = expand('%:p')
-            let bufname_friendly = expand('%:p:~')
-            if winnr > 1
-              let cmd = 'rightbelow ' . split_cmd
+            if &bt != '' && &ft == 'nerdtree'
+              " Don't create a split window for the NERD tree because the
+              " plug-in will create its own split window from :NERDtree.
+              let restore_nerd_tree = 1
             else
-              let cmd = tabpagenr > 1 ? 'tabnew' : 'edit'
-            endif
-            let split_cmd = winwidth(winnr) == &columns ? 'split' : 'vsplit'
-            if bufname('%') =~ '^\w\+://' || filereadable(bufname_absolute)
-              call add(a:commands, 'silent ' . cmd . ' ' . fnameescape(bufname_friendly))
-            else
-              call add(a:commands, cmd == 'edit' ? 'enew' : cmd)
-              if bufname_absolute != ''
-                call add(a:commands, 'file ' . fnameescape(bufname_friendly))
+              let bufname_absolute = expand('%:p')
+              let bufname_friendly = expand('%:p:~')
+              if winnr > 1 && !restore_nerd_tree
+                let cmd = 'rightbelow ' . split_cmd
+              elseif tabpagenr > 1 && winnr == 1
+                let cmd = 'tabnew'
+              else
+                let cmd = 'edit'
               endif
-            endif
-            if haslocaldir()
-              call add(a:commands, 'lcd ' . fnameescape(getcwd()))
-            endif
-            if &ft == 'netrw' && isdirectory(bufname_absolute)
-              call add(a:commands, 'doautocmd BufAdd ' . fnameescape(bufname_absolute))
-            else
-              for option_name in ['filetype', 'buftype']
-                let option_value = eval('&' . option_name)
-                if option_value != ''
-                  call add(a:commands, 'if &' . option_name . ' != ' . string(option_value))
-                  call add(a:commands, "\tsetlocal " . option_name . '=' . option_value)
-                  call add(a:commands, 'endif')
+              let split_cmd = winwidth(winnr) == &columns ? 'split' : 'vsplit'
+              if bufname('%') =~ '^\w\+://' || filereadable(bufname_absolute)
+                call add(a:commands, 'silent ' . cmd . ' ' . fnameescape(bufname_friendly))
+              else
+                call add(a:commands, cmd == 'edit' ? 'enew' : cmd)
+                if bufname_absolute != ''
+                  call add(a:commands, 'file ' . fnameescape(bufname_friendly))
                 endif
-              endfor
-              for option_name in ['wrap', 'foldenable']
-                let option_value = eval('&' . option_name)
-                call add(a:commands, 'setlocal ' . (option_value ? '' : 'no') . option_name)
-              endfor
-              if &previewwindow
-                call add(a:commands, 'setlocal previewwindow')
+              endif
+              if haslocaldir()
+                call add(a:commands, 'lcd ' . fnameescape(getcwd()))
+              endif
+              if &ft == 'netrw' && isdirectory(bufname_absolute)
+                call add(a:commands, 'doautocmd BufAdd ' . fnameescape(bufname_absolute))
+              else
+                for option_name in ['filetype', 'buftype']
+                  let option_value = eval('&' . option_name)
+                  if option_value != ''
+                    call add(a:commands, 'if &' . option_name . ' != ' . string(option_value))
+                    call add(a:commands, "\tsetlocal " . option_name . '=' . option_value)
+                    call add(a:commands, 'endif')
+                  endif
+                endfor
+                for option_name in ['wrap', 'foldenable']
+                  let option_value = eval('&' . option_name)
+                  call add(a:commands, 'setlocal ' . (option_value ? '' : 'no') . option_name)
+                endfor
+                if &previewwindow
+                  call add(a:commands, 'setlocal previewwindow')
+                endif
               endif
             endif
           endif
         endfor
+        if restore_nerd_tree
+          call add(a:commands, 'NERDTree')
+        endif
         call add(a:commands, winrestcmd())
         " Restore the topline and cursor position in each window *after*
         " creating the windows in the tab page (it doesn't work before that).
@@ -160,7 +170,7 @@ function! session#save_state(commands) " {{{2
   finally
     execute 'tabnext' tabpagenr_save
   endtry
-  call extend(a:commands, ['', 'set invsplitbelow'])
+  call add(a:commands, '')
   " Show/hide/redraw the tab line after restoring the tab pages.
   call add(a:commands, 'let &stal = ' . &stal)
   " call extend(a:commands, split(xolox#swapchoice#restore('PluginSessionSwapExistsHack'), "\n"))
@@ -337,19 +347,21 @@ function! session#open_cmd(name, bang) abort " {{{2
   if name != ''
     let path = session#get_path(name)
     if !filereadable(path)
-      let msg = "session.vim: The session script %s doesn't exist!"
-      call xolox#warning(msg, fnamemodify(path, ':~'))
+      let msg = "session.vim: The %s session at %s doesn't exist!"
+      call xolox#warning(msg, string(name), fnamemodify(path, ':~'))
     elseif a:bang == '!' || !s:session_is_locked(path, 'OpenSession')
       call session#close_cmd(a:bang, 1)
       call s:lock_session(path)
       execute 'source' fnameescape(path)
       unlet! s:session_is_dirty
+      call xolox#message("session.vim: Opened %s session from %s.", string(name), fnamemodify(path, ':~'))
     endif
   endif
 endfunction
 
 function! session#save_cmd(name, bang) abort " {{{2
-  let path = session#get_path(s:get_name(s:unescape(a:name), 1))
+  let name = s:get_name(s:unescape(a:name), 1)
+  let path = session#get_path(name)
   let friendly_path = fnamemodify(path, ':~')
   if a:bang == '!' || !s:session_is_locked(path, 'SaveSession')
     let lines = ['" ' . friendly_path . ': Vim session script.']
@@ -361,11 +373,12 @@ function! session#save_cmd(name, bang) abort " {{{2
     call session#save_fullscreen(lines)
     call extend(lines, ['', 'doautoall SessionLoadPost', '', '" vim: ro nowrap smc=128'])
     if writefile(lines, path) != 0
-      let msg = "session.vim: Failed to save %s session!"
-      call xolox#warning(msg, friendly_path)
+      let msg = "session.vim: Failed to save %s session to %s!"
+      call xolox#warning(msg, string(name), friendly_path)
     else
-      let msg = "session.vim: Saved session to %s."
-      call xolox#message(msg, friendly_path)
+      " TODO Lock session?
+      let msg = "session.vim: Saved %s session to %s."
+      call xolox#message(msg, string(name), friendly_path)
       let v:this_session = path
       unlet! s:session_is_dirty
     endif
@@ -377,15 +390,15 @@ function! session#delete_cmd(name, bang) " {{{2
   if name != ''
     let path = session#get_path(name)
     if !filereadable(path)
-      let msg = "session.vim: The session script %s doesn't exist!"
-      call xolox#warning(msg, fnamemodify(path, ':~'))
+      let msg = "session.vim: The %s session at %s doesn't exist!"
+      call xolox#warning(msg, string(name), fnamemodify(path, ':~'))
     elseif a:bang == '!' || !s:session_is_locked(path, 'DeleteSession')
       if delete(path) != 0
-        let msg = "session.vim: Failed to delete session script %s!"
-        call xolox#warning(msg, fnamemodify(path, ':~'))
+        let msg = "session.vim: Failed to delete %s session at %s!"
+        call xolox#warning(msg, string(name), fnamemodify(path, ':~'))
       else
-        let msg = "session.vim: Deleted session script %s."
-        call xolox#message(msg, fnamemodify(path, ':~'))
+        let msg = "session.vim: Deleted %s session at %s."
+        call xolox#message(msg, string(name), fnamemodify(path, ':~'))
       endif
     endif
   endif

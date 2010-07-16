@@ -1,6 +1,6 @@
 " Vim script
 " Maintainer: Peter Odding <peter@peterodding.com>
-" Last Change: July 12, 2010
+" Last Change: July 16, 2010
 " URL: http://peterodding.com/code/vim/profile/autoload/xolox.vim
 
 " Miscellaneous functions used throughout my Vim profile and plug-ins.
@@ -64,8 +64,9 @@ function! s:message(hlgroup, args) " -- implementation of message() and warning(
     try
       " Temporarily disable Vim's |hit-enter| prompt and mode display.
       let s:more_save = &more
+      let s:ruler_save = &ruler
       let s:smd_save = &showmode
-      set nomore noshowmode
+      set nomore noruler noshowmode
       augroup PluginXoloxHideMode
         autocmd! CursorHold,CursorHoldI * call s:clear_message()
       augroup END
@@ -90,6 +91,7 @@ function! s:clear_message()
   augroup! PluginXoloxHideMode
   echo ''
   let &more = s:more_save
+  let &ruler = s:ruler_save
   let &showmode = s:smd_save
-  unlet s:more_save s:smd_save
+  unlet s:more_save s:ruler_save s:smd_save
 endfunction
