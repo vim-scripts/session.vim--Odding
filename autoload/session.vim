@@ -1,6 +1,6 @@
 " Vim script
 " Author: Peter Odding
-" Last Change: July 16, 2010
+" Last Change: July 30, 2010
 " URL: http://peterodding.com/code/vim/session/
 
 " Public API for session persistence. {{{1
@@ -77,6 +77,7 @@ function! session#save_state(commands) " {{{2
   " call session#save_options(a:commands)
 
   call session#save_cwd(a:commands)
+  call session#save_buffers(a:commands)
   " call extend(a:commands, split(xolox#swapchoice#change('PluginSessionSwapExistsHack', 'e'), "\n"))
   " call add(a:commands, '')
   call session#save_args(a:commands)
@@ -207,9 +208,26 @@ function! session#save_options(commands) " {{{2
 endfunction
 
 function! session#save_cwd(commands) " {{{2
-  if !&autochdir
+  if !&autochdir && &sessionoptions =~ '\<curdir\>'
     let directory = fnamemodify(getcwd(), ':p')
     call add(a:commands, 'cd ' . fnameescape(directory))
+  endif
+endfunction
+
+function! session#save_buffers(commands) " {{{2
+  if &sessionoptions =~ '\<buffers\>'
+    for bufnr in range(1, bufnr('$'))
+      if bufexists(bufnr)
+        let bufname = bufname(bufnr)
+        if bufname != ''
+          let pathname = fnamemodify(bufname, ':p:~')
+          call add(a:commands, 'badd ' . fnameescape(pathname))
+        endif
+      endif
+    endfor
+    if exists('pathname')
+      call add(a:commands, '')
+    endif
   endif
 endfunction
 
@@ -360,7 +378,7 @@ function! session#open_cmd(name, bang) abort " {{{2
 endfunction
 
 function! session#save_cmd(name, bang) abort " {{{2
-  let name = s:get_name(s:unescape(a:name), 1)
+  let name = s:get_name(a:name, 1)
   let path = session#get_path(name)
   let friendly_path = fnamemodify(path, ':~')
   if a:bang == '!' || !s:session_is_locked(path, 'SaveSession')
@@ -436,11 +454,29 @@ function! session#close_cmd(bang, silent) abort " {{{2
   return 1
 endfunction
 
-function! s:unescape(s)
-  return substitute(a:s, '\\\(.\)', '\1', 'g')
+function! session#restart_cmd(bang) abort " {{{2
+  let name = s:get_name('', 0)
+  if name == '' | let name = 'restart' | endif
+  execute 'SaveSession' . a:bang fnameescape(name)
+  let progname = shellescape(fnameescape(v:progname))
+  let servername = shellescape(fnameescape(name))
+  let command = progname . ' --servername ' . servername
+  if has('win32') || has('win64')
+    execute '!start' command
+  else
+    let term = shellescape(fnameescape($TERM))
+    let encoding = "--cmd ':set enc=" . escape(&enc, '\ ') . "'"
+    execute '! TERM=' . term command encoding '&'
+  endif
+  execute 'CloseSession' . a:bang
+  quitall
 endfunction
 
 " Miscellaneous functions. {{{1
+
+function! s:unescape(s) " {{{2
+  return substitute(a:s, '\\\(.\)', '\1', 'g')
+endfunction
 
 function! s:select_name(name, action) " {{{2
   if a:name != ''

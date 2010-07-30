@@ -14,15 +14,15 @@ is used if you don't provide one. When a session is active, has been changed
 and you quit Vim you'll be prompted whether you want to save the open session
 before quitting Vim:
 
-!Screenshot of auto-save prompt [2]
+    Screenshot of auto-save prompt, see reference [2]
 
 When you start Vim without editing any files and the 'default' session exists,
 you'll be prompted whether you want to restore the default session:
 
-!Screenshot of auto-open prompt [3]
+    Screenshot of auto-open prompt, see reference [3]
 
-When you start Vim with a custom server name (see |--servername|) that matches
-one of the existing session names then the matching session will be
+When you start Vim with a custom server name (see |--servername| ) that
+matches one of the existing session names then the matching session will be
 automatically restored. For example I use several sessions to quickly edit my
 Vim plug-ins:
 >
@@ -53,10 +53,10 @@ The :SaveSession command                                        *:SaveSession*
 
 This command saves your current editing session just like Vim's built-in
 |:mksession| command does. The difference is that you don't pass a full
-pathname as argument but just a name, any name really. Press <Tab> to get
-completion of existing session names. If you don't provide an argument the
-name 'default' is used, unless an existing session is open in which case the
-name of that session will be used.
+pathname as argument but just a name, any name really. Press to get completion
+of existing session names. If you don't provide an argument the name 'default'
+is used, unless an existing session is open in which case the name of that
+session will be used.
 
 If the session you're trying to save is already active in another Vim instance
 you'll get a warning and nothing happens. You can use use a bang (!) as in
@@ -163,7 +163,7 @@ If you like the script please vote for it on www.vim.org [6].
 License ~
 
 This software is licensed under the MIT license [7].
-© 2010 Peter Odding <peter@peterodding.com>.
+© 2010 Peter Odding .
 
 ==============================================================================
 Sample session script ~
