@@ -1,6 +1,6 @@
 " Vim script
 " Author: Peter Odding
-" Last Change: July 30, 2010
+" Last Change: August 19, 2010
 " URL: http://peterodding.com/code/vim/session/
 
 " Public API for session persistence. {{{1
@@ -113,6 +113,9 @@ function! session#save_state(commands) " {{{2
               else
                 let cmd = 'edit'
               endif
+
+              " FIXME How to persist any and all split window layouts?!
+
               let split_cmd = winwidth(winnr) == &columns ? 'split' : 'vsplit'
               if bufname('%') =~ '^\w\+://' || filereadable(bufname_absolute)
                 call add(a:commands, 'silent ' . cmd . ' ' . fnameescape(bufname_friendly))
@@ -122,7 +125,7 @@ function! session#save_state(commands) " {{{2
                   call add(a:commands, 'file ' . fnameescape(bufname_friendly))
                 endif
               endif
-              if haslocaldir()
+              if exists('*haslocaldir') && haslocaldir()
                 call add(a:commands, 'lcd ' . fnameescape(getcwd()))
               endif
               if &ft == 'netrw' && isdirectory(bufname_absolute)
@@ -385,11 +388,11 @@ function! session#save_cmd(name, bang) abort " {{{2
     let lines = ['" ' . friendly_path . ': Vim session script.']
     call add(lines, '" Created by session.vim on ' . strftime('%d %B %Y at %H:%M:%S.'))
     call extend(lines, ['" Open this file in Vim and run :source % to restore your session.'])
-    call extend(lines, ['', 'let v:this_session = ' . string(path), ''])
+    call extend(lines, ['', 'let g:SessionLoad = 1', 'let v:this_session = ' . string(path), ''])
     call session#save_config(lines)
     call session#save_state(lines)
     call session#save_fullscreen(lines)
-    call extend(lines, ['', 'doautoall SessionLoadPost', '', '" vim: ro nowrap smc=128'])
+    call extend(lines, ['', 'doautoall SessionLoadPost', 'unlet g:SessionLoad', '', '" vim: ro nowrap smc=128'])
     if writefile(lines, path) != 0
       let msg = "session.vim: Failed to save %s session to %s!"
       call xolox#warning(msg, string(name), friendly_path)
@@ -461,6 +464,7 @@ function! session#restart_cmd(bang) abort " {{{2
   let progname = shellescape(fnameescape(v:progname))
   let servername = shellescape(fnameescape(name))
   let command = progname . ' --servername ' . servername
+  let command .= ' -c ' . shellescape('OpenSession ' . fnameescape(name))
   if has('win32') || has('win64')
     execute '!start' command
   else
