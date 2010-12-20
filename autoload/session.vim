@@ -110,24 +110,30 @@ endfunction
 " Integration between :mksession, :NERDTree and :Project. {{{3
 
 function! session#save_special_windows(session)
-  if exists(':NERDTree') == 2 && match(a:session, '\<NERD_tree_\d\+$') >= 0
+  if exists('g:loaded_nerd_tree') && match(a:session, '\<NERD_tree_\d\+$') >= 0
           \ || exists(':Project') == 2 && exists('g:proj_running')
+          \ || exists('g:loaded_netrw') && match(a:session, '^file sftp://')
     let tabpage = tabpagenr()
     let window = winnr()
     try
       if &sessionoptions =~ '\<tabpages\>'
-        tabdo windo call s:check_special_window(a:session)
+        tabdo call s:check_special_tabpage(a:session)
       else
-        windo call s:check_special_window(a:session)
+        call s:check_special_tabpage(a:session)
       endif
     finally
       execute 'tabnext' tabpage
       execute window . 'wincmd w'
-      if &sessionoptions =~ '\<tabpages\>'
-        call add(a:session, 'tabnext ' . tabpage)
-      endif
-      call add(a:session, window . 'wincmd w')
+      call s:jump_to_window(a:session, tabpage, window)
     endtry
+  endif
+endfunction
+
+function! s:check_special_tabpage(session)
+  let status = 0
+  windo let status += s:check_special_window(a:session)
+  if status > 0 && winnr('$') > 1
+    call add(a:session, winrestcmd())
   endif
 endfunction
 
@@ -138,19 +144,29 @@ function! s:check_special_window(session)
   elseif exists('g:proj_running') && g:proj_running == bufnr('%')
     let command = 'Project'
     let argument = expand('%:p')
+  elseif &filetype == 'netrw'
+    let command = 'edit'
+    let argument = bufname('%')
   endif
   if exists('command')
-    if &sessionoptions =~ '\<tabpages\>'
-      call add(a:session, 'tabnext ' . tabpagenr())
+    call s:jump_to_window(a:session, tabpagenr(), winnr())
+    if command != 'edit'
+      call add(a:session, 'bwipeout')
     endif
-    call add(a:session, winnr() . 'wincmd w')
-    call add(a:session, 'bwipeout')
     let argument = fnamemodify(argument, ':~')
     if &sessionoptions =~ '\<slash\>'
       let argument = substitute(argument, '\', '/', 'g')
     endif
     call add(a:session, command . ' ' . fnameescape(argument))
+    return 1
   endif
+endfunction
+
+function! s:jump_to_window(session, tabpage, window)
+  if &sessionoptions =~ '\<tabpages\>'
+    call add(a:session, 'tabnext ' . a:tabpage)
+  endif
+  call add(a:session, a:window . 'wincmd w')
 endfunction
 
 " Automatic commands to manage the default session. {{{1
@@ -237,7 +253,7 @@ function! s:prompt(msg, var) " {{{2
     return 1
   else
     let format = "%s Note that you can permanently disable this dialog by adding the following line to your %s script:\n\n\t:let %s = 1"
-    let vimrc = has('win32') || has('win64') ? '~\_vimrc' : '~/.vimrc'
+    let vimrc = xolox#is_windows() ? '~\_vimrc' : '~/.vimrc'
     let prompt = printf(format, a:msg, vimrc, a:var)
     return confirm(prompt, "&Yes\n&No", 1, 'Question') == 1
   endif
@@ -283,9 +299,7 @@ function! session#save_cmd(name, bang) abort " {{{2
   if a:bang == '!' || !s:session_is_locked(path, 'SaveSession')
     let lines = []
     call session#save_session(lines, friendly_path)
-    let is_dos = has('dos16') || has('dos32')
-    let is_windows = has('win32') || has('win64')
-    if (is_dos || is_windows) && &ssop !~ '\<unix\>'
+    if xolox#is_windows() && &ssop !~ '\<unix\>'
       call map(lines, 'v:val . "\r"')
     endif
     if writefile(lines, path) != 0
@@ -431,11 +445,12 @@ endfunction
 function! session#get_names() " {{{2
   let directory = xolox#path#absolute(g:session_directory)
   let filenames = split(glob(xolox#path#merge(directory, '*.vim')), "\n")
-  return map(filenames, 'fnameescape(xolox#path#decode(fnamemodify(v:val, ":t:r")))')
+  return map(filenames, 'session#path_to_name(v:val)')
 endfunction
 
 function! session#complete_names(arg, line, pos) " {{{2
-  return filter(session#get_names(), 'v:val =~ a:arg')
+  let names = filter(session#get_names(), 'v:val =~ a:arg')
+  return map(names, 'fnameescape(v:val)')
 endfunction
 
 " Lock file management: {{{2

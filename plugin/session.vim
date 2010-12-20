@@ -2,7 +2,7 @@
 " Author: Peter Odding
 " Last Change: December 20, 2010
 " URL: http://peterodding.com/code/vim/session/
-" Version: 1.3.2
+" Version: 1.3.5
 
 " Support for automatic update using the GLVS plug-in.
 " GetLatestVimScripts: 3150 1 :AutoInstall: session.zip
@@ -24,7 +24,7 @@ endif
 
 " The default directory where session scripts are stored.
 if !exists('g:session_directory')
-  if has('win32') || has('win64')
+  if xolox#is_windows()
     let g:session_directory = '~\vimfiles\sessions'
   else
     let g:session_directory = '~/.vim/sessions'
