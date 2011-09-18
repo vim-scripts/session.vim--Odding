@@ -3,7 +3,7 @@
 " Last Change: September 18, 2011
 " URL: http://peterodding.com/code/vim/session/
 
-let g:xolox#session#version = '1.4.14'
+let g:xolox#session#version = '1.4.16'
 
 " Public API for session persistence. {{{1
 
@@ -43,9 +43,11 @@ function! xolox#session#save_features(commands) " {{{2
 endfunction
 
 function! xolox#session#save_colors(commands) " {{{2
+  call add(a:commands, 'if &background != ' . string(&background))
+  call add(a:commands, "\tset background=" . &background)
+  call add(a:commands, 'endif')
   if exists('g:colors_name') && type(g:colors_name) == type('') && g:colors_name != ''
     let template = "if !exists('g:colors_name') || g:colors_name != %s | colorscheme %s | endif"
-    call add(a:commands, 'set background=' . &background)
     call add(a:commands, printf(template, string(g:colors_name), fnameescape(g:colors_name)))
   endif
 endfunction
@@ -116,7 +118,7 @@ function! s:state_filter(line)
   elseif a:line =~ '^file .\{-}[\\/]NERD_tree_\d$'
     " Silence "E95: Buffer with this name already exists" when restoring
     " mirrored NERDTree windows.
-    return 'silent! ' . a:line
+    return '" ' . a:line
   else
     return a:line
   endif
@@ -171,9 +173,7 @@ function! s:check_special_window(session)
   endif
   if exists('command')
     call s:jump_to_window(a:session, tabpagenr(), winnr())
-    if command != 'edit'
-      call add(a:session, 'bwipeout')
-    endif
+    call add(a:session, 'let s:bufnr = bufnr("%")')
     if argument == ''
       call add(a:session, command)
     else
@@ -183,6 +183,7 @@ function! s:check_special_window(session)
       endif
       call add(a:session, command . ' ' . fnameescape(argument))
     endif
+    call add(a:session, 'execute "bwipeout" s:bufnr')
     return 1
   endif
 endfunction
